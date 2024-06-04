@@ -1,0 +1,311 @@
+---
+title: "Introduction_usage_gt"
+author: "Rania El Fahli"
+date:   "2024-06-04"
+output:
+  html_document:
+    toc: true
+    toc_depth : 6
+    toc_float: true
+    code_folding : hide
+    theme: flatly
+---
+
+<link rel="preconnect" href="https://fonts.googleapis.com"> <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin> <link href="https://fonts.googleapis.com/css2?family=Chivo+Mono:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	fig.height = 15,
+	fig.width = 22,
+	message = F,
+	warning = F,
+	echo = T
+)
+
+```
+
+La librarie R *gt* permet de visusaliser une table de données (tibble, dataframe) et de la mettre en forme. Contrairement à *gtsummary*, les fonctionnalités de *gt* ne permettent pas de réaliser des calculs à partir des données fournies mais seulement de les représenter sous la forme d'un tableau.\
+Autrement dit, les calculs doivent être réalisés en amont sur la table de données.
+
+```{r echo=TRUE}
+library(dplyr) ; library(tidyverse) ; library(gt) ; library(gtExtras)
+```
+
+**Déroulé des étapes :**
+
+1.  Installer dans un premier temps les packages *gt* et *gtExtras*.
+
+2.  Préparer ses données (nettoyage, recodage), réaliser les calculs des indicateurs, mettre au format souhaité (*long ou wide*)
+
+3.  Générer un tableau *gt* à partir des données
+
+4.  Mise en forme à partir des différentes fonctions
+
+    # **Préparer ses données**
+
+Pour l'exemple ici, nous repartons du fichier détail des migrations résidentielles de l'année 2020 (commune de résidence actuelle - commune de résidence antérieure) afin de calculer la part et les effectifs d'individus selon leur types de mobilités (variable IRAN, indicateur de résidence antérieure) et leur sexe sur l'ensemble de la France (hors Mayotte).
+
+```{r load_data, include=FALSE}
+
+library(arrow)
+library(COGugaison) 
+library(readxl)
+source("C:/Users/Rania El Fahli/Documents/MIGCOM_repo/Migrations_residentielles_communes.Insee/analyses_fichiers_details_2020.R")
+```
+
+```{r echo=TRUE}
+migcom_2020_arm$SEXE <- as.character(migcom_2020_arm$SEXE)
+
+effectifs <- migcom_2020_arm |>
+        dplyr::group_by(SEXE, IRAN) |>
+        dplyr::summarise(nb_ind = sum(IPONDI)) |>
+        ungroup() |>
+        collect() 
+
+total <- effectifs |>
+    dplyr::group_by(SEXE) |>
+    dplyr::summarise(nb_total = sum(nb_ind)) |>
+    ungroup() 
+  
+finale <- effectifs |>
+    left_join(total, by = "SEXE")
+  
+finale <- finale |>
+    mutate(part = (nb_ind/nb_total)*100) 
+  
+```
+
+```{r, recodage}
+finale <-  finale|>
+  mutate(
+  IRAN = as.factor(IRAN) |>
+  forcats::fct_recode(
+    "Même logement" = "1",
+    "Autre logement de la même commune" = "2", 
+    "Autre commune du département" = "3",
+    "Autre département de la région" = "4", 
+    "Hors de la région : métropole" = "5", 
+    "Hors de la région : DOM" = "6", 
+    "Hors de la région : TOM-COM" = "7"
+  ), 
+  SEXE = as.factor(SEXE) |>
+    forcats::fct_recode(
+      "Hommes" = "1", 
+      "Femmes" = "2"
+    )
+)
+
+```
+
+Notre table finale est au format long :
+
+```{r}
+finale 
+```
+
+On a ici croisé la variable IRAN (indicateur de résidence antérieure) et le sexe des individus, on souhaite donc que le tableau ait en colonne les modalités de la variable sexe et en lignes les modalités de la variable IRAN. Il faut passer la table au format wide
+
+```{r, format_wide}
+ finale |>
+  select(-c(nb_total)) |>
+  pivot_wider(
+    id_cols = IRAN, 
+    names_from = SEXE, 
+    values_from = c(nb_ind, part) # on souhaite ensuite avoir dans la même cellule les effectifs et les parts
+  )
+```
+
+```{r}
+finale <- finale |>
+  select(-c(nb_total)) |>
+  pivot_wider(
+    id_cols = IRAN, 
+    names_from = SEXE, 
+    values_from = c(nb_ind, part) # on souhaite ensuite avoir dans la même cellule les effectifs et les parts
+  ) |>
+  janitor::adorn_totals(
+    where = "row"
+  ) # je rajoute une ligne total
+```
+
+# Générer un tableau gt et le mettre en forme 
+
+Pour l'instant le tableau à l'état brut n'est pas très lisible..
+
+```{r}
+finale |>
+  gt()
+```
+
+On peut commencer par utiliser l'argument rowname_col pour délimiter la variable IRAN et créer des labels au niveau des lignes du tableau
+
+```{r}
+finale |>
+  gt(rowname_col = "IRAN")
+```
+
+On souhaite avoir au sein de la même cellule les parts et les effectifs, on utilise la fonction cols_merge() pour fusionner les colonnes correspondant au même sexe
+
+```{r}
+finale |>
+  gt(rowname_col = "IRAN") |>
+  cols_merge(
+    columns = c(part_Femmes, nb_ind_Femmes), 
+    rows = everything(), 
+    pattern = "{1} % ({2})" # on souhaite afficher la valeur numéro 1 (la part) suivie d'un symbole "%" et la valeur 2 (effectifs) entre parenthèses.
+  ) |>
+   cols_merge(
+    columns = c(part_Hommes, nb_ind_Hommes), 
+    rows = everything(), 
+    pattern = "{1} % ({2})" 
+  ) |>
+  cols_label(
+    part_Femmes = "Femmes", 
+    part_Hommes = "Hommes"
+  ) # changer les labels des colonnes 
+  
+```
+
+Maintenant que la structure générale du tableau est là, on peut finir la mise en forme (alignement du texte, nombre de décimales, titre, source..)
+
+```{r}
+
+finale |>
+  gt(rowname_col = "IRAN") |>
+  cols_merge(
+    columns = c(part_Femmes, nb_ind_Femmes), 
+    rows = everything(), 
+    pattern = "{1} % ({2})" # on souhaite afficher la valeur numéro 1 (la part) suivie d'un symbole "%" et la valeur 2 (effectifs) entre parenthèses.
+  ) |>
+   cols_merge(
+    columns = c(part_Hommes, nb_ind_Hommes), 
+    rows = everything(), 
+    pattern = "{1} % ({2})" 
+  ) |>
+  cols_label(
+    part_Femmes = "Femmes", 
+    part_Hommes = "Hommes"
+  ) |>
+  # mise en forme des valeurs
+  fmt_number(
+    columns = starts_with("part"), 
+    rows = everything(), 
+    decimals = 1, 
+    dec_mark = ","
+  ) |>
+   fmt_number(
+    columns = starts_with("nb_ind"), 
+    rows = everything(), 
+    decimals = 0, 
+    sep_mark = " "
+  ) |>
+  # centrer le texte 
+  cols_align(
+    columns = -c(IRAN), 
+    align = "center"
+  ) |>
+  cols_align(
+    columns = IRAN, 
+    align = "left"
+  ) |>
+  # ajouter le nom de la variable en lignes
+  tab_stubhead(
+    label = "Indicateur de résidence antérieure"
+  ) |>
+  # ajouter un titre
+  tab_header( title = "Indicateur de résidence antérieure selon le sexe", 
+             subtitle = "Migrations internes, 2019-2020" ) |>
+# des notes en bas du tableau 
+  tab_footnote(
+    footnote = "Champ : France (hors Mayotte).
+    Source : Fichier détail, RP Insee 2020."
+  )
+```
+
+On peut changer différents éléments esthétiques 
+```{r include=FALSE}
+library(showtext)
+font_add_google("Montserrat")
+```
+
+
+```{r}
+finale |>
+  gt(rowname_col = "IRAN") |>
+  cols_merge(
+    columns = c(part_Femmes, nb_ind_Femmes), 
+    rows = everything(), 
+    pattern = "{1} % ({2})" # on souhaite afficher la valeur numéro 1 (la part) suivie d'un symbole "%" et la valeur 2 (effectifs) entre parenthèses.
+  ) |>
+   cols_merge(
+    columns = c(part_Hommes, nb_ind_Hommes), 
+    rows = everything(), 
+    pattern = "{1} % ({2})" 
+  ) |>
+  cols_label(
+    part_Femmes = "Femmes", 
+    part_Hommes = "Hommes"
+  ) |>
+  # mise en forme des valeurs
+  fmt_number(
+    columns = starts_with("part"), 
+    rows = everything(), 
+    decimals = 1, 
+    dec_mark = ","
+  ) |>
+   fmt_number(
+    columns = starts_with("nb_ind"), 
+    rows = everything(), 
+    decimals = 0, 
+    sep_mark = " "
+  ) |>
+  # centrer le texte 
+  cols_align(
+    columns = -c(IRAN), 
+    align = "center"
+  ) |>
+  cols_align(
+    columns = IRAN, 
+    align = "left"
+  ) |>
+  # ajouter le nom de la variable en lignes
+  tab_stubhead(
+    label = "Indicateur de résidence antérieure"
+  ) |>
+  # ajouter un titre
+  tab_header( title = "Indicateur de résidence antérieure selon le sexe", 
+             subtitle = "Migrations internes, 2019-2020" ) |>
+# des notes en bas du tableau 
+  tab_footnote(
+    footnote = "Champ : France (hors Mayotte).
+    Source : Fichier détail, RP Insee 2020."
+  ) |>
+  opt_table_font(
+    font = google_font(name  = "Montserrat") # google font
+  ) |>
+  tab_options(
+     column_labels.border.top.width = px(3),
+     column_labels.border.top.color = "transparent",
+     table.border.top.color = "transparent",
+     table.border.bottom.color = "transparent",
+     data_row.padding = px(4),
+     footnotes.font.size = 10,
+     heading.align = "left", 
+     table.font.size = px(15)
+  ) |>
+# modifier la mise en format de certains titres ou cellules 
+tab_style(
+  style = cell_text(weight = "bold"), 
+  locations = list(
+    cells_column_labels(
+      columns = everything()
+    ), 
+    cells_stubhead()
+  )
+) |>
+  tab_style(
+    style = cell_text(face = "italic"), 
+    locations = cells_footnotes()
+  )
+```
+
