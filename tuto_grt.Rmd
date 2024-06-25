@@ -1,14 +1,12 @@
 ---
-title: "Introduction_usage_gt"
+title: "Introduction au package gt"
 author: "Rania El Fahli"
 date:   "2024-06-04"
 output:
-  html_document:
-    toc: true
-    toc_depth : 6
-    toc_float: true
-    code_folding : hide
-    theme: flatly
+
+  html_notebook: 
+    highlight: espresso
+css: style.css
 ---
 
 <link rel="preconnect" href="https://fonts.googleapis.com"> <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin> <link href="https://fonts.googleapis.com/css2?family=Chivo+Mono:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
@@ -27,11 +25,8 @@ knitr::opts_chunk$set(
 La librarie R *gt* permet de visusaliser une table de données (tibble, dataframe) et de la mettre en forme. Contrairement à *gtsummary*, les fonctionnalités de *gt* ne permettent pas de réaliser des calculs à partir des données fournies mais seulement de les représenter sous la forme d'un tableau.\
 Autrement dit, les calculs doivent être réalisés en amont sur la table de données.
 
-```{r echo=TRUE}
-library(dplyr) ; library(tidyverse) ; library(gt) ; library(gtExtras)
-```
 
-**Déroulé des étapes :**
+<div> **Déroulé des étapes :**
 
 1.  Installer dans un premier temps les packages *gt* et *gtExtras*.
 
@@ -40,8 +35,13 @@ library(dplyr) ; library(tidyverse) ; library(gt) ; library(gtExtras)
 3.  Générer un tableau *gt* à partir des données
 
 4.  Mise en forme à partir des différentes fonctions
+</div>
 
-    # **Préparer ses données**
+```{r echo=TRUE}
+library(dplyr) ; library(tidyverse) ; library(gt) ; library(gtExtras)
+```
+
+# **Préparer ses données**
 
 Pour l'exemple ici, nous repartons du fichier détail des migrations résidentielles de l'année 2020 (commune de résidence actuelle - commune de résidence antérieure) afin de calculer la part et les effectifs d'individus selon leur types de mobilités (variable IRAN, indicateur de résidence antérieure) et leur sexe sur l'ensemble de la France (hors Mayotte).
 
@@ -128,7 +128,7 @@ finale <- finale |>
   ) # je rajoute une ligne total
 ```
 
-# Générer un tableau gt et le mettre en forme 
+# **Générer un tableau gt et le mettre en forme **
 
 Pour l'instant le tableau à l'état brut n'est pas très lisible..
 
